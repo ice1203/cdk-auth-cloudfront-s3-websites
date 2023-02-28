@@ -1,6 +1,7 @@
 "use strict";
 var jwt = require("jsonwebtoken");
 var jwkToPem = require("jwk-to-pem");
+require("dotenv").config();
 
 /*
 TO DO:
@@ -96,6 +97,13 @@ exports.handler = (event, context, callback) => {
     } else {
       //Valid token.
       console.log("Successful verification");
+      // accessTokenからscopeで許可されるプレフィックス部分を取り出し
+      var scopearray = decodedJwt.payload.scope.split("//");
+      let preffix = scopearray[2].split(".", 1);
+      // cfrequest.uriの先頭に/scopeを追加
+      let replaceduri = "/" + preffix[0] + cfrequest.uri;
+      cfrequest.uri = replaceduri;
+      console.log(cfrequest.uri + "->" + replaceduri);
       //remove authorization header
       delete cfrequest.headers.authorization;
       //CloudFront can proceed to fetch the content from origin
