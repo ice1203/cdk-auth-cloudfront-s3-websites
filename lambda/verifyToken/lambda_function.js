@@ -1,35 +1,50 @@
 "use strict";
-var jwt = require("jsonwebtoken");
-var jwkToPem = require("jwk-to-pem");
-require("dotenv").config();
+import jwt from "jsonwebtoken";
+import jwkToPem from "jwk-to-pem";
+import * as dotenv from "dotenv";
+dotenv.config();
+import got from "got";
+import S3Client from "@aws-sdk/client-s3";
 
 /*
 TO DO:
-copy values from CloudFormation outputs into USERPOOLID and JWKS variables
+copy values from CloudFormation outputs into USERPOOLID and JWKS letiables
 */
 
-var USERPOOLID = process.env.USERPOOLID;
-var JWKS = process.env.JWKS;
+let USERPOOLID = process.env.USERPOOLID;
+let JWKS;
 
 /*
 verify values above
 */
 
-var region = "us-east-1";
-var iss = "https://cognito-idp." + region + ".amazonaws.com/" + USERPOOLID;
-var pems;
-
-pems = {};
-var keys = JSON.parse(JWKS).keys;
-for (var i = 0; i < keys.length; i++) {
-  //Convert each key to PEM
-  var key_id = keys[i].kid;
-  var modulus = keys[i].n;
-  var exponent = keys[i].e;
-  var key_type = keys[i].kty;
-  var jwk = { kty: key_type, n: modulus, e: exponent };
-  var pem = jwkToPem(jwk);
-  pems[key_id] = pem;
+let region = "us-east-1";
+let cognito_host = "cognito-idp." + region + ".amazonaws.com";
+let iss = "https://" + cognito_host + "/" + USERPOOLID;
+let jwks_url = iss + "/.well-known/jwks.json";
+/*
+get jwks
+*/
+async function fetchData() {
+  try {
+    let pems = {};
+    const response = await got(jwks_url);
+    console.log("got-res" + response.body);
+    let keys = JSON.parse(response.body).keys;
+    for (let i = 0; i < keys.length; i++) {
+      //Convert each key to PEM
+      let key_id = keys[i].kid;
+      let modulus = keys[i].n;
+      let exponent = keys[i].e;
+      let key_type = keys[i].kty;
+      let jwk = { kty: key_type, n: modulus, e: exponent };
+      let pem = jwkToPem(jwk);
+      pems[key_id] = pem;
+    }
+    return pems;
+  } catch (error) {
+    console.log(error);
+  }
 }
 
 const response401 = {
@@ -37,12 +52,13 @@ const response401 = {
   statusDescription: "Unauthorized",
 };
 
-exports.handler = (event, context, callback) => {
+export async function handler(event, context, callback) {
   const cfrequest = event.Records[0].cf.request;
   const headers = cfrequest.headers;
   console.log("getting started");
   console.log("USERPOOLID=" + USERPOOLID);
   console.log("region=" + region);
+  let pems = await fetchData();
   console.log("pems=" + pems);
 
   //Fail if no authorization header found
@@ -53,11 +69,11 @@ exports.handler = (event, context, callback) => {
   }
 
   //strip out "Bearer " to extract JWT token only
-  var jwtToken = headers.authorization[0].value.slice(7);
+  let jwtToken = headers.authorization[0].value.slice(7);
   console.log("jwtToken=" + jwtToken);
 
   //Fail if the token is not jwt
-  var decodedJwt = jwt.decode(jwtToken, { complete: true });
+  let decodedJwt = jwt.decode(jwtToken, { complete: true });
   console.log(decodedJwt);
   if (!decodedJwt) {
     console.log("Not a valid JWT token");
@@ -80,8 +96,8 @@ exports.handler = (event, context, callback) => {
   }
 
   //Get the kid from the token and retrieve corresponding PEM
-  var kid = decodedJwt.header.kid;
-  var pem = pems[kid];
+  let kid = decodedJwt.header.kid;
+  let pem = pems[kid];
   if (!pem) {
     console.log("Invalid access token");
     callback(null, response401);
@@ -98,7 +114,7 @@ exports.handler = (event, context, callback) => {
       //Valid token.
       console.log("Successful verification");
       // accessTokenからscopeで許可されるプレフィックス部分を取り出し
-      var scopearray = decodedJwt.payload.scope.split("//");
+      let scopearray = decodedJwt.payload.scope.split("//");
       let preffix = scopearray[2].split(".", 1);
       // cfrequest.uriの先頭に/scopeを追加
       let replaceduri = "/" + preffix[0] + cfrequest.uri;
@@ -111,4 +127,4 @@ exports.handler = (event, context, callback) => {
       return true;
     }
   });
-};
+}
