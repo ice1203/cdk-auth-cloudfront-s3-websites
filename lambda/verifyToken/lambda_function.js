@@ -28,7 +28,6 @@ async function fetchData() {
   try {
     let pems = {};
     const response = await got(jwks_url);
-    console.log("got-res" + response.body);
     let keys = JSON.parse(response.body).keys;
     for (let i = 0; i < keys.length; i++) {
       //Convert each key to PEM
