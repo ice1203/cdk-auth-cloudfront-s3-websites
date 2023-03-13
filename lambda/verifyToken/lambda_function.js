@@ -12,7 +12,6 @@ copy values from CloudFormation outputs into USERPOOLID and JWKS letiables
 */
 
 let USERPOOLID = process.env.USERPOOLID;
-let JWKS;
 
 /*
 verify values above
@@ -46,7 +45,7 @@ async function fetchData() {
     console.log(error);
   }
 }
-
+let pems = await fetchData();
 const response401 = {
   status: "401",
   statusDescription: "Unauthorized",
@@ -58,8 +57,10 @@ export async function handler(event, context, callback) {
   console.log("getting started");
   console.log("USERPOOLID=" + USERPOOLID);
   console.log("region=" + region);
-  let pems = await fetchData();
-  console.log("pems=" + pems);
+  Object.keys(pems).forEach((key) => {
+    console.log("key:" + key);
+    console.log("pem:" + pems[key]);
+  });
 
   //Fail if no authorization header found
   if (!headers.authorization) {
