@@ -4,6 +4,7 @@ import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
 import { S3 } from "./resources/s3";
 import { CloudFront } from "./resources/cloudfront";
+import { IAM } from "./resources/iam";
 
 export class StatelessStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -32,10 +33,14 @@ export class StatelessStack extends cdk.Stack {
     // S3
     const s3 = new S3(this);
     s3.createResources();
+    // IAMrole
+    const iam = new IAM(this);
+    iam.createResources();
     // cloudfront
     const cloudfront = new CloudFront(this, {
       s3Bucket: s3.s3bucket,
       originAccessIdentiry: s3.originAccessId,
+      lambdaIamRole: iam.lambdaRole,
       region: region,
       userPoolID: cognitoUserPoolID,
     });
